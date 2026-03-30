@@ -1,10 +1,10 @@
 /* =============================================================
-   Agile Kanban AI — app.js
+   Agile Kanban AI — Frontend Logic
    ============================================================= */
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let tickets         = [];
-let editingId       = null;
+let editingId       = null;   // null = create, string = edit
 let currentCriteria = [];
 let draggedId       = null;
 
@@ -32,8 +32,8 @@ function renderBoard() {
     col.innerHTML = '';
 
     if (!group.length) {
-      col.innerHTML = `<div class="empty-state">
-        <span class="empty-icon">📭</span>No tickets yet</div>`;
+      col.innerHTML = `<div class="text-center py-10 text-slate-400 text-xs select-none">
+        <div class="text-3xl mb-1">📭</div>No tickets yet</div>`;
       return;
     }
     group.forEach(t => col.appendChild(buildCard(t)));
@@ -42,57 +42,50 @@ function renderBoard() {
 
 function buildCard(ticket) {
   const PRIORITY = {
-    blocking: { label: 'Blocking', cls: 'badge-blocking' },
-    urgent:   { label: 'Urgent',   cls: 'badge-urgent'   },
-    normal:   { label: 'Normal',   cls: 'badge-normal'   },
+    blocking: { label: 'Blocking', cls: 'bg-red-100 text-red-700 border border-red-200' },
+    urgent:   { label: 'Urgent',   cls: 'bg-amber-100 text-amber-700 border border-amber-200' },
+    normal:   { label: 'Normal',   cls: 'bg-slate-100 text-slate-500' },
   };
   const p = PRIORITY[ticket.priority] || PRIORITY.normal;
 
   const card = document.createElement('div');
-  card.className  = 'ticket-card';
+  card.className  = 'ticket-card bg-white border border-slate-200 rounded-xl p-3 shadow-sm cursor-grab hover:shadow-md transition-shadow group relative select-none';
   card.draggable  = true;
   card.dataset.id = ticket.id;
 
-  // ── Drag events ──────────────────────────────────────────
   card.addEventListener('dragstart', e => {
     draggedId = ticket.id;
-    // Need a tiny delay so the drag image is captured before we dim the card
-    requestAnimationFrame(() => card.classList.add('dragging'));
+    card.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', ticket.id); // required for Firefox
   });
-
   card.addEventListener('dragend', () => {
     card.classList.remove('dragging');
     draggedId = null;
-    // Clean up any leftover drag-over states
-    document.querySelectorAll('.drop-zone').forEach(z => z.classList.remove('drag-over'));
   });
 
-  // ── Build inner HTML ──────────────────────────────────────
   const descHtml = ticket.description
-    ? `<p class="card-desc">${esc(ticket.description)}</p>` : '';
+    ? `<p class="text-slate-400 text-xs line-clamp-2 mt-0.5 mb-2">${esc(ticket.description)}</p>` : '';
 
   const pointsBadge = ticket.storyPoints
-    ? `<span class="badge-points">${ticket.storyPoints}pt</span>` : '';
+    ? `<span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">${ticket.storyPoints} pts</span>` : '';
 
   const critBadge = ticket.acceptanceCriteria?.length
-    ? `<span class="badge-criteria">✓ ${ticket.acceptanceCriteria.length}</span>` : '';
+    ? `<span class="text-xs text-slate-400">✓ ${ticket.acceptanceCriteria.length} criteria</span>` : '';
 
   card.innerHTML = `
-    <div class="card-actions">
-      <button class="card-action-btn card-action-edit" onclick="openModal('${ticket.id}')">edit</button>
-      <button class="card-action-btn card-action-del"  onclick="handleDelete('${ticket.id}')">del</button>
+    <div class="absolute top-2 right-2 hidden group-hover:flex gap-1 z-10">
+      <button onclick="openModal('${ticket.id}')"
+        class="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-md hover:bg-indigo-200 font-medium">Edit</button>
+      <button onclick="handleDelete('${ticket.id}')"
+        class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-md hover:bg-red-200 font-medium">Del</button>
     </div>
-    <p class="card-title">${esc(ticket.title)}</p>
+    <h3 class="font-semibold text-slate-800 text-sm pr-20 leading-snug">${esc(ticket.title)}</h3>
     ${descHtml}
-    ${(pointsBadge || p || critBadge) ? `<div class="card-divider"></div>` : ''}
-    <div class="card-meta">
+    <div class="flex items-center gap-2 flex-wrap mt-1">
       ${pointsBadge}
-      <span class="badge-priority ${p.cls}">${p.label}</span>
+      <span class="text-xs px-2 py-0.5 rounded-full font-medium ${p.cls}">${p.label}</span>
       ${critBadge}
     </div>`;
-
   return card;
 }
 
@@ -114,7 +107,7 @@ function openModal(ticketId = null, defaultStatus = 'todo') {
     document.getElementById('ticket-status').value          = t.status;
     currentCriteria = [...(t.acceptanceCriteria || [])];
   } else {
-    document.getElementById('modal-title').textContent      = 'New Ticket';
+    document.getElementById('modal-title').textContent       = 'New Ticket';
     document.getElementById('ticket-title').value           = '';
     document.getElementById('ticket-description').value     = '';
     document.getElementById('ticket-points').value          = '';
@@ -129,8 +122,7 @@ function openModal(ticketId = null, defaultStatus = 'todo') {
 
 function closeModal() {
   document.getElementById('modal').classList.add('hidden');
-  editingId = null;
-  currentCriteria = [];
+  editingId = null; currentCriteria = [];
 }
 
 function handleModalBackdrop(e) {
@@ -184,11 +176,11 @@ function renderCriteria() {
   container.innerHTML = '';
   currentCriteria.forEach((c, i) => {
     const row = document.createElement('div');
-    row.className = 'criteria-row';
+    row.className = 'flex items-start gap-2 bg-slate-50 rounded-lg px-3 py-2 text-sm';
     row.innerHTML = `
-      <span class="criteria-check">✓</span>
-      <span class="criteria-text">${esc(c)}</span>
-      <button class="criteria-remove" onclick="removeCriteria(${i})">&times;</button>`;
+      <span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span>
+      <span class="flex-1 text-slate-700">${esc(c)}</span>
+      <button onclick="removeCriteria(${i})" class="text-slate-300 hover:text-red-500 text-lg leading-none">&times;</button>`;
     container.appendChild(row);
   });
 }
@@ -275,43 +267,20 @@ async function aiAutoFillAll() {
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────────────────────
-function onDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  e.currentTarget.classList.add('drag-over');
-}
-
-function onDragLeave(e) {
-  // Only remove class when truly leaving the drop zone (not just entering a child)
-  if (!e.currentTarget.contains(e.relatedTarget)) {
-    e.currentTarget.classList.remove('drag-over');
-  }
-}
+function onDragOver(e)  { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
 
 async function onDrop(e, targetStatus) {
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
-
-  const id = draggedId || e.dataTransfer.getData('text/plain');
-  if (!id) return;
-
-  const ticket = tickets.find(t => t.id === id);
+  if (!draggedId) return;
+  const ticket = tickets.find(t => t.id === draggedId);
   if (!ticket || ticket.status === targetStatus) return;
-
-  // Optimistic update
-  tickets = tickets.map(t => t.id === id ? { ...t, status: targetStatus } : t);
-  renderBoard();
-
   try {
-    const updated = await apiPut(`/tickets/${id}`, { ...ticket, status: targetStatus });
-    tickets = tickets.map(t => t.id === id ? updated : t);
+    const updated = await apiPut(`/tickets/${draggedId}`, { ...ticket, status: targetStatus });
+    tickets = tickets.map(t => t.id === draggedId ? updated : t);
     renderBoard();
-  } catch {
-    // Roll back
-    tickets = tickets.map(t => t.id === id ? ticket : t);
-    renderBoard();
-    showToast('Move failed', 'error');
-  }
+  } catch { showToast('Move failed', 'error'); }
 }
 
 // ── HTTP Helpers ──────────────────────────────────────────────────────────────
@@ -334,7 +303,7 @@ function hideLoading() { document.getElementById('loading').classList.add('hidde
 let toastTimer;
 function showToast(msg, type = 'success') {
   const inner = document.getElementById('toast-inner');
-  inner.className   = `toast-inner ${type === 'error' ? 'toast-error' : 'toast-success'}`;
+  inner.className   = `px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white ${type === 'error' ? 'bg-red-600' : 'bg-slate-800'}`;
   inner.textContent = msg;
   document.getElementById('toast').classList.remove('hidden');
   clearTimeout(toastTimer);
@@ -343,7 +312,7 @@ function showToast(msg, type = 'success') {
 
 function showReasoning(id, text) {
   const el = document.getElementById(id);
-  el.textContent = `↳ ${text}`;
+  el.textContent = `💡 ${text}`;
   el.classList.remove('hidden');
 }
 
