@@ -3,161 +3,147 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agile Kanban AI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    .ticket-card.dragging { opacity: 0.4; transform: rotate(2deg); }
-    .drop-zone.drag-over  { background-color: #eef2ff; border: 2px dashed #6366f1; border-radius: 0.75rem; }
-    .line-clamp-2 {
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-  </style>
+  <title>Kanban AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body class="bg-slate-100 min-h-screen font-sans">
+<body>
 
-  <!-- Header -->
-  <header class="bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">🚀 Agile Kanban AI</h1>
-        <p class="text-indigo-200 text-sm mt-0.5">Sprint planning powered by an AI Agile Coach</p>
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-brand">
+        <span class="brand-mark">KB</span>
+        <div>
+          <h1 class="brand-title">Kanban AI</h1>
+          <p class="brand-sub">Sprint planning · AI Agile Coach</p>
+        </div>
       </div>
-      <button onclick="openModal()"
-        class="bg-white text-indigo-600 font-semibold px-4 py-2 rounded-lg shadow hover:bg-indigo-50 transition text-sm">
-        + New Ticket
+      <button onclick="openModal()" class="btn btn-primary">
+        <span class="btn-icon">+</span> New Ticket
       </button>
     </div>
   </header>
 
-  <!-- Kanban Board -->
-  <main class="max-w-7xl mx-auto px-6 py-6">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <main class="board-outer">
+    <div class="board-grid">
 
       <!-- To Do -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full bg-slate-400 inline-block"></span>
-            <h2 class="font-semibold text-slate-700 text-sm uppercase tracking-wide">To Do</h2>
-            <span id="count-todo" class="bg-slate-100 text-slate-500 text-xs font-medium px-2 py-0.5 rounded-full">0</span>
+      <div class="column" data-status="todo">
+        <div class="column-header">
+          <div class="column-header-left">
+            <span class="col-dot dot-todo"></span>
+            <h2 class="col-label">To Do</h2>
+            <span class="col-count" id="count-todo">0</span>
           </div>
-          <button onclick="openModal(null,'todo')" class="text-slate-400 hover:text-indigo-500 text-xl font-bold leading-none">+</button>
+          <button onclick="openModal(null,'todo')" class="col-add-btn" title="Add ticket">+</button>
         </div>
-        <div id="column-todo" class="drop-zone p-3 flex-1 min-h-48 space-y-2 overflow-y-auto"
-          ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event,'todo')"></div>
+        <div
+          id="column-todo"
+          class="drop-zone"
+          ondragover="onDragOver(event)"
+          ondragleave="onDragLeave(event)"
+          ondrop="onDrop(event,'todo')"
+        ></div>
       </div>
 
       <!-- In Progress -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full bg-blue-400 inline-block"></span>
-            <h2 class="font-semibold text-slate-700 text-sm uppercase tracking-wide">In Progress</h2>
-            <span id="count-inprogress" class="bg-blue-50 text-blue-500 text-xs font-medium px-2 py-0.5 rounded-full">0</span>
+      <div class="column" data-status="inprogress">
+        <div class="column-header">
+          <div class="column-header-left">
+            <span class="col-dot dot-inprogress"></span>
+            <h2 class="col-label">In Progress</h2>
+            <span class="col-count count-inprogress" id="count-inprogress">0</span>
           </div>
-          <button onclick="openModal(null,'inprogress')" class="text-slate-400 hover:text-indigo-500 text-xl font-bold leading-none">+</button>
+          <button onclick="openModal(null,'inprogress')" class="col-add-btn" title="Add ticket">+</button>
         </div>
-        <div id="column-inprogress" class="drop-zone p-3 flex-1 min-h-48 space-y-2 overflow-y-auto"
-          ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event,'inprogress')"></div>
+        <div
+          id="column-inprogress"
+          class="drop-zone"
+          ondragover="onDragOver(event)"
+          ondragleave="onDragLeave(event)"
+          ondrop="onDrop(event,'inprogress')"
+        ></div>
       </div>
 
       <!-- Done -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full bg-emerald-400 inline-block"></span>
-            <h2 class="font-semibold text-slate-700 text-sm uppercase tracking-wide">Done</h2>
-            <span id="count-done" class="bg-emerald-50 text-emerald-600 text-xs font-medium px-2 py-0.5 rounded-full">0</span>
+      <div class="column" data-status="done">
+        <div class="column-header">
+          <div class="column-header-left">
+            <span class="col-dot dot-done"></span>
+            <h2 class="col-label">Done</h2>
+            <span class="col-count count-done" id="count-done">0</span>
           </div>
-          <button onclick="openModal(null,'done')" class="text-slate-400 hover:text-indigo-500 text-xl font-bold leading-none">+</button>
+          <button onclick="openModal(null,'done')" class="col-add-btn" title="Add ticket">+</button>
         </div>
-        <div id="column-done" class="drop-zone p-3 flex-1 min-h-48 space-y-2 overflow-y-auto"
-          ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event,'done')"></div>
+        <div
+          id="column-done"
+          class="drop-zone"
+          ondragover="onDragOver(event)"
+          ondragleave="onDragLeave(event)"
+          ondrop="onDrop(event,'done')"
+        ></div>
       </div>
 
     </div>
   </main>
 
-  <!-- Modal -->
-  <div id="modal" class="fixed inset-0 bg-black/50 hidden z-40 flex items-center justify-center p-4"
-    onclick="handleModalBackdrop(event)">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+  <!-- ── Modal ── -->
+  <div id="modal" class="modal-overlay hidden" onclick="handleModalBackdrop(event)">
+    <div class="modal-box">
 
-      <!-- Modal Header -->
-      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
-        <h2 id="modal-title" class="text-xl font-bold text-slate-800">New Ticket</h2>
-        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-3xl leading-none">&times;</button>
+      <div class="modal-header">
+        <h2 id="modal-title" class="modal-heading">New Ticket</h2>
+        <button onclick="closeModal()" class="modal-close">&times;</button>
       </div>
 
-      <!-- Modal Body -->
-      <div class="p-6 space-y-5 overflow-y-auto flex-1">
+      <div class="modal-body">
 
-        <!-- AI Auto-Fill Banner -->
-        <div class="bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200 rounded-xl p-4 flex items-center justify-between gap-4">
-          <div>
-            <p class="font-semibold text-indigo-700 text-sm">✨ AI Auto-Fill All</p>
-            <p class="text-indigo-500 text-xs mt-0.5">Enter a title, then let the AI generate all fields in one shot</p>
+        <!-- AI Auto-Fill -->
+        <div class="ai-banner">
+          <div class="ai-banner-text">
+            <p class="ai-banner-title">AI Auto-Fill</p>
+            <p class="ai-banner-desc">Enter a title, then fill all fields at once</p>
           </div>
-          <button onclick="aiAutoFillAll()"
-            class="flex-shrink-0 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">
-            Auto-Fill
-          </button>
+          <button onclick="aiAutoFillAll()" class="btn btn-ai">Run</button>
         </div>
 
         <!-- Title -->
-        <div>
-          <label class="block text-sm font-semibold text-slate-700 mb-1">
-            Title <span class="text-red-400">*</span>
-          </label>
-          <input id="ticket-title" type="text" placeholder='e.g. "Login Page" or "Password Reset Flow"'
-            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        <div class="field">
+          <label class="field-label">Title <span class="required">*</span></label>
+          <input id="ticket-title" type="text" class="input" placeholder='e.g. "Login Page" or "Password Reset"' />
         </div>
 
         <!-- Description -->
-        <div>
-          <label class="block text-sm font-semibold text-slate-700 mb-1">Description</label>
-          <textarea id="ticket-description" rows="3"
-            placeholder="As a [user], I want to [goal] so that [reason]…"
-            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+        <div class="field">
+          <label class="field-label">Description</label>
+          <textarea id="ticket-description" rows="3" class="input textarea"
+            placeholder="As a [user], I want to [goal] so that [reason]…"></textarea>
         </div>
 
         <!-- Acceptance Criteria -->
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-sm font-semibold text-slate-700">Acceptance Criteria</label>
-            <button onclick="aiGenerateCriteria()"
-              class="text-xs bg-violet-100 text-violet-700 px-3 py-1 rounded-full font-medium hover:bg-violet-200 transition">
-              ✨ Generate with AI
-            </button>
+        <div class="field">
+          <div class="field-row">
+            <label class="field-label">Acceptance Criteria</label>
+            <button onclick="aiGenerateCriteria()" class="chip-btn chip-violet">Generate with AI</button>
           </div>
-          <div id="criteria-list" class="space-y-2 mb-2"></div>
-          <div class="flex gap-2">
-            <input id="criteria-input" type="text" placeholder="Add criterion manually and press Enter…"
-              onkeydown="handleCriteriaKey(event)"
-              class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            <button onclick="addCriteriaManually()"
-              class="bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-sm hover:bg-slate-200 transition font-medium">
-              Add
-            </button>
+          <div id="criteria-list" class="criteria-list"></div>
+          <div class="criteria-add-row">
+            <input id="criteria-input" type="text" class="input" placeholder="Add criterion and press Enter…"
+              onkeydown="handleCriteriaKey(event)" />
+            <button onclick="addCriteriaManually()" class="btn btn-ghost">Add</button>
           </div>
         </div>
 
         <!-- Story Points & Priority -->
-        <div class="grid grid-cols-2 gap-4">
-          <!-- Story Points -->
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="text-sm font-semibold text-slate-700">Story Points</label>
-              <button onclick="aiEstimatePoints()"
-                class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-medium hover:bg-blue-200 transition">
-                ✨ Estimate
-              </button>
+        <div class="two-col">
+          <div class="field">
+            <div class="field-row">
+              <label class="field-label">Story Points</label>
+              <button onclick="aiEstimatePoints()" class="chip-btn chip-blue">Estimate</button>
             </div>
-            <select id="ticket-points"
-              class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select id="ticket-points" class="input select">
               <option value="">Not estimated</option>
               <option value="1">1 — Trivial</option>
               <option value="2">2 — Simple</option>
@@ -166,66 +152,54 @@
               <option value="8">8 — Large</option>
               <option value="13">13 — Complex</option>
             </select>
-            <p id="points-reasoning" class="mt-1 text-xs text-slate-400 italic hidden"></p>
+            <p id="points-reasoning" class="reasoning hidden"></p>
           </div>
 
-          <!-- Priority -->
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="text-sm font-semibold text-slate-700">Priority</label>
-              <button onclick="aiAnalyzePriority()"
-                class="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-full font-medium hover:bg-amber-200 transition">
-                ✨ Analyze
-              </button>
+          <div class="field">
+            <div class="field-row">
+              <label class="field-label">Priority</label>
+              <button onclick="aiAnalyzePriority()" class="chip-btn chip-amber">Analyze</button>
             </div>
-            <select id="ticket-priority"
-              class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select id="ticket-priority" class="input select">
               <option value="normal">Normal</option>
               <option value="urgent">Urgent</option>
               <option value="blocking">Blocking</option>
             </select>
-            <p id="priority-reasoning" class="mt-1 text-xs text-slate-400 italic hidden"></p>
+            <p id="priority-reasoning" class="reasoning hidden"></p>
           </div>
         </div>
 
-        <!-- Column selector -->
-        <div>
-          <label class="block text-sm font-semibold text-slate-700 mb-1">Column</label>
-          <select id="ticket-status"
-            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <!-- Column -->
+        <div class="field">
+          <label class="field-label">Column</label>
+          <select id="ticket-status" class="input select">
             <option value="todo">To Do</option>
             <option value="inprogress">In Progress</option>
             <option value="done">Done</option>
           </select>
         </div>
 
-      </div><!-- /body -->
-
-      <!-- Modal Footer -->
-      <div class="px-6 py-4 border-t border-slate-200 flex gap-3 flex-shrink-0">
-        <button onclick="saveTicket()"
-          class="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-indigo-700 transition">
-          Save Ticket
-        </button>
-        <button onclick="closeModal()"
-          class="px-6 py-2.5 border border-slate-300 rounded-lg text-slate-600 text-sm hover:bg-slate-50 transition">
-          Cancel
-        </button>
       </div>
+
+      <div class="modal-footer">
+        <button onclick="saveTicket()" class="btn btn-primary btn-wide">Save Ticket</button>
+        <button onclick="closeModal()" class="btn btn-ghost">Cancel</button>
+      </div>
+
     </div>
   </div>
 
-  <!-- Loading Overlay -->
-  <div id="loading" class="fixed inset-0 bg-black/40 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-2xl px-8 py-6 text-center shadow-2xl">
-      <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-      <p id="loading-text" class="text-slate-700 font-medium text-sm">AI is thinking…</p>
+  <!-- Loading -->
+  <div id="loading" class="loading-overlay hidden">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <p id="loading-text" class="loading-text">AI is thinking…</p>
     </div>
   </div>
 
   <!-- Toast -->
-  <div id="toast" class="fixed bottom-5 right-5 hidden z-50">
-    <div id="toast-inner" class="px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white"></div>
+  <div id="toast" class="toast hidden">
+    <div id="toast-inner" class="toast-inner"></div>
   </div>
 
   <script src="app.js"></script>
