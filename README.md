@@ -1,4 +1,4 @@
-#  Agile Kanban AI
+# 🚀 Agile Kanban AI
 
 An AI-powered Kanban board for Agile sprint planning. Built with Node.js/Express on the backend and plain HTML + Tailwind CSS on the frontend. The AI features are powered by OpenAI GPT-4o acting as an expert Agile Coach.
 
@@ -75,3 +75,24 @@ agile-kanban-ai/
 | PUT | `/api/tickets/:id` | Update a ticket |
 | DELETE | `/api/tickets/:id` | Delete a ticket |
 | POST | `/api/ai/generate` | AI generation (see below) |
+
+### AI Generate — Request Body
+```json
+{
+  "type": "acceptance_criteria | story_points | priority | all",
+  "title": "Login Page",
+  "description": "As a user I want to log in...",
+  "acceptanceCriteria": []
+}
+```
+
+---
+
+## Prompt Engineering Notes
+
+The AI is given a structured **system prompt** that establishes it as an expert Agile Coach. Key design decisions:
+
+- **Persona**: 15+ years of Scrum/Kanban experience, output-focused.
+- **Explicit rules** for each task (GWT format, Fibonacci scale definitions, priority taxonomy).
+- **JSON-only output constraint**: `response_format: json_object` is set at the API level and reinforced in the prompt to ensure deterministic parsing.
+- **Temperature 0.6**: balances creativity in criterion wording with consistency in estimates.
