@@ -1,1 +1,52 @@
-[]
+[
+  {
+    "id": "7f08dd10-c887-42ee-878c-c0f16cedeb49",
+    "title": "Payment Integration",
+    "description": "As a user I want this to be completed as early as possible",
+    "acceptanceCriteria": [
+      "Given the user is on the checkout page, When they select a payment method, Then the method should be saved for the transaction.",
+      "Given the user has entered valid payment details, When they submit the payment, Then the payment should be processed successfully.",
+      "Given the payment is successful, When the transaction completes, Then the user should receive a confirmation email.",
+      "Given the payment fails, When the transaction does not complete, Then the user should receive an error message with retry options."
+    ],
+    "storyPoints": 8,
+    "priority": "urgent",
+    "status": "todo",
+    "createdAt": "2026-03-31T13:38:45.919Z",
+    "updatedAt": "2026-04-07T12:59:32.921Z"
+  },
+  {
+    "id": "c9c653e4-6c54-4c07-8e5b-3a4732b0d1f8",
+    "title": "Paris Tour",
+    "description": "",
+    "acceptanceCriteria": [
+      "Given a user is on the travel website, When they search for 'Paris Tour', Then they should see a list of available tours in Paris.",
+      "Given a user has selected a Paris tour, When they click on 'Book Now', Then they should be taken to the booking page.",
+      "Given a user is on the booking page, When they enter valid payment details, Then the payment should be processed successfully.",
+      "Given a user has completed booking, When they check their email, Then they should receive a booking confirmation email.",
+      "Given a user wants to cancel a booking, When they click on 'Cancel Booking', Then the booking should be cancelled and a confirmation email sent."
+    ],
+    "storyPoints": 8,
+    "priority": "urgent",
+    "status": "todo",
+    "createdAt": "2026-03-31T13:46:07.591Z",
+    "updatedAt": "2026-03-31T19:00:36.392Z"
+  },
+  {
+    "id": "6b3b5d2d-81e7-435a-94b0-01feb67a1a45",
+    "title": "dashboard design",
+    "description": "",
+    "acceptanceCriteria": [
+      "Given a user is logged in, When they navigate to the dashboard, Then they should see a summary of their recent activities.",
+      "Given a user is on the dashboard, When they select a specific date range, Then the dashboard should update to display data for that range.",
+      "Given a user is on the dashboard, When they click on a specific data point, Then they should see detailed information about that data point.",
+      "Given a user is on the dashboard, When they refresh the page, Then the dashboard should retain the current state and data.",
+      "Given a user is on the dashboard, When there is no data available, Then they should see an appropriate message indicating no data is available."
+    ],
+    "storyPoints": 8,
+    "priority": "normal",
+    "status": "todo",
+    "createdAt": "2026-03-31T14:02:37.306Z",
+    "updatedAt": "2026-04-07T12:58:03.544Z"
+  }
+]

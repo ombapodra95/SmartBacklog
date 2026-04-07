@@ -9,9 +9,23 @@ const path    = require('path');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+const VALID_PRIORITIES   = ['blocking', 'urgent', 'normal'];
+const VALID_STATUSES     = ['todo', 'inprogress', 'done'];
+const FIBONACCI_POINTS   = [1, 2, 3, 5, 8, 13];
+const TITLE_MAX_LENGTH   = 200;
+const DESC_MAX_LENGTH    = 2000;
+
+// ── Singleton OpenAI client ───────────────────────────────────────────────────
+const openaiKeyValid = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your_openai_api_key_here';
+const openai = openaiKeyValid ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+
+// ── Async handler wrapper ─────────────────────────────────────────────────────
+const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── File-based persistence ────────────────────────────────────────────────────
@@ -34,14 +48,43 @@ app.get('/api/tickets', (req, res) => {
   res.json(loadTickets());
 });
 
+// ── Validation helper ──────────────────────────────────────────────────────────
+function validateTicketBody(body, isCreate = false) {
+  const errors = [];
+  const title = (body.title || '').trim();
+
+  if (isCreate && !title) errors.push('Title is required.');
+  if (title && title.length > TITLE_MAX_LENGTH) errors.push(`Title must be ${TITLE_MAX_LENGTH} characters or fewer.`);
+
+  const desc = (body.description || '').trim();
+  if (desc.length > DESC_MAX_LENGTH) errors.push(`Description must be ${DESC_MAX_LENGTH} characters or fewer.`);
+
+  if (body.priority !== undefined && !VALID_PRIORITIES.includes(body.priority))
+    errors.push(`Priority must be one of: ${VALID_PRIORITIES.join(', ')}.`);
+
+  if (body.status !== undefined && !VALID_STATUSES.includes(body.status))
+    errors.push(`Status must be one of: ${VALID_STATUSES.join(', ')}.`);
+
+  if (body.storyPoints !== undefined && body.storyPoints !== null && !FIBONACCI_POINTS.includes(Number(body.storyPoints)))
+    errors.push(`Story points must be one of: ${FIBONACCI_POINTS.join(', ')}.`);
+
+  if (body.acceptanceCriteria !== undefined && !Array.isArray(body.acceptanceCriteria))
+    errors.push('Acceptance criteria must be an array.');
+
+  return errors;
+}
+
 app.post('/api/tickets', (req, res) => {
+  const errors = validateTicketBody(req.body, true);
+  if (errors.length) return res.status(400).json({ error: errors.join(' ') });
+
   const tickets = loadTickets();
   const ticket  = {
     id:                 uuidv4(),
     title:              (req.body.title || '').trim() || 'Untitled',
     description:        (req.body.description || '').trim(),
     acceptanceCriteria: Array.isArray(req.body.acceptanceCriteria) ? req.body.acceptanceCriteria : [],
-    storyPoints:        req.body.storyPoints || null,
+    storyPoints:        req.body.storyPoints ? Number(req.body.storyPoints) : null,
     priority:           req.body.priority    || 'normal',
     status:             req.body.status      || 'todo',
     createdAt:          new Date().toISOString(),
@@ -52,6 +95,9 @@ app.post('/api/tickets', (req, res) => {
 });
 
 app.put('/api/tickets/:id', (req, res) => {
+  const errors = validateTicketBody(req.body, false);
+  if (errors.length) return res.status(400).json({ error: errors.join(' ') });
+
   const tickets = loadTickets();
   const idx     = tickets.findIndex(t => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Ticket not found' });
@@ -62,7 +108,7 @@ app.put('/api/tickets/:id', (req, res) => {
     title:              (req.body.title       !== undefined ? req.body.title       : t.title).trim(),
     description:        (req.body.description !== undefined ? req.body.description : t.description).trim(),
     acceptanceCriteria:  req.body.acceptanceCriteria !== undefined ? req.body.acceptanceCriteria : t.acceptanceCriteria,
-    storyPoints:         req.body.storyPoints !== undefined ? req.body.storyPoints : t.storyPoints,
+    storyPoints:         req.body.storyPoints !== undefined ? (req.body.storyPoints ? Number(req.body.storyPoints) : null) : t.storyPoints,
     priority:            req.body.priority    !== undefined ? req.body.priority    : t.priority,
     status:              req.body.status      !== undefined ? req.body.status      : t.status,
     updatedAt:          new Date().toISOString(),
@@ -118,10 +164,10 @@ Your three areas of expertise:
 
 IMPORTANT: Respond ONLY with a valid JSON object in the exact schema requested. Output NO text, markdown fences, or commentary outside the JSON.`;
 
-app.post('/api/ai/generate', async (req, res) => {
+app.post('/api/ai/generate', asyncHandler(async (req, res) => {
   const { type, title, description, acceptanceCriteria } = req.body;
 
-  if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'your_openai_api_key_here') {
+  if (!openai) {
     return res.status(500).json({
       error: 'OpenAI API key not configured. Open .env, replace "your_openai_api_key_here" with your real key, then restart the server.',
     });
@@ -129,8 +175,6 @@ app.post('/api/ai/generate', async (req, res) => {
   if (!title || !title.trim()) {
     return res.status(400).json({ error: 'A ticket title is required for AI generation.' });
   }
-
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   const criteriaBlock = (acceptanceCriteria && acceptanceCriteria.length)
     ? acceptanceCriteria.map((c, i) => `  ${i + 1}. ${c}`).join('\n')
@@ -168,6 +212,12 @@ app.post('/api/ai/generate', async (req, res) => {
     console.error('[AI Error]', err.message);
     res.status(500).json({ error: `AI generation failed: ${err.message}` });
   }
+}));
+
+// ── Centralized error handler ─────────────────────────────────────────────────
+app.use((err, _req, res, _next) => {
+  console.error('[Unhandled Error]', err);
+  res.status(500).json({ error: 'An unexpected error occurred.' });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

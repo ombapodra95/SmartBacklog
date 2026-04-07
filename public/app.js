@@ -1,12 +1,15 @@
 /* =============================================================
-   Agile Kanban AI — Frontend Logic
+   Agile Kanban AI — app.js (Enhanced)
    ============================================================= */
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let tickets         = [];
-let editingId       = null;   // null = create, string = edit
+let editingId       = null;
 let currentCriteria = [];
 let draggedId       = null;
+let aiInProgress    = false;
+let searchQuery     = '';
+let previewId       = null;
 
 const API = '/api';
 
@@ -19,74 +22,225 @@ async function init() {
     showToast('Could not reach the server', 'error');
   }
   renderBoard();
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('float-preview')?.classList.contains('open')) {
+        closePreview();
+      } else {
+        closeModal();
+      }
+    }
+  });
+
+  // Search input
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value.trim().toLowerCase();
+      renderBoard();
+    });
+  }
+
+  // Dark mode init
+  initDarkMode();
+}
+
+function isInputFocused() {
+  const tag = document.activeElement?.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+// ── Dark Mode ─────────────────────────────────────────────────────────────────
+function initDarkMode() {
+  const saved = localStorage.getItem('kanban-dark-mode');
+  if (saved === 'false') {
+    document.documentElement.classList.remove('dark');
+  } else {
+    document.documentElement.classList.add('dark');
+  }
+  updateDarkModeIcon();
+}
+
+function toggleDarkMode() {
+  document.documentElement.classList.toggle('dark');
+  const isDark = document.documentElement.classList.contains('dark');
+  localStorage.setItem('kanban-dark-mode', isDark);
+  updateDarkModeIcon();
+}
+
+function updateDarkModeIcon() {
+  const btn = document.getElementById('dark-mode-toggle');
+  if (!btn) return;
+  const isDark = document.documentElement.classList.contains('dark');
+  btn.innerHTML = isDark ? '☀️' : '🌙';
+  btn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
 }
 
 // ── Board Rendering ───────────────────────────────────────────────────────────
 function renderBoard() {
+  const filtered = searchQuery
+    ? tickets.filter(t =>
+        t.title.toLowerCase().includes(searchQuery) ||
+        (t.description || '').toLowerCase().includes(searchQuery)
+      )
+    : tickets;
+
   ['todo', 'inprogress', 'done'].forEach(status => {
     const col   = document.getElementById(`column-${status}`);
     const count = document.getElementById(`count-${status}`);
-    const group = tickets.filter(t => t.status === status);
+    const group = filtered.filter(t => t.status === status);
 
     count.textContent = group.length;
     col.innerHTML = '';
 
     if (!group.length) {
-      col.innerHTML = `<div class="text-center py-10 text-slate-400 text-xs select-none">
-        <div class="text-3xl mb-1">📭</div>No tickets yet</div>`;
+      const emptyIcons = { todo: '📋', inprogress: '⚡', done: '🎉' };
+      const emptyTexts = { todo: 'No tasks queued', inprogress: 'Nothing in flight', done: 'No completions yet' };
+      col.innerHTML = `<div class="empty-state">
+        <span class="empty-icon">${emptyIcons[status]}</span>
+        <span class="empty-label">${emptyTexts[status]}</span></div>`;
       return;
     }
     group.forEach(t => col.appendChild(buildCard(t)));
   });
+
+  renderStats(filtered);
+
+  // Refresh floating preview if open
+  if (previewId) {
+    const still = tickets.find(t => t.id === previewId);
+    if (still) openPreview(previewId);
+    else closePreview();
+  }
 }
 
+// ── Stats Bar ───────────────────────────────────────────────────────────────
+function renderStats(filtered) {
+  const statsBar = document.getElementById('stats-bar');
+  if (!statsBar) return;
+
+  const totalTickets = filtered.length;
+  const byStatus = { todo: [], inprogress: [], done: [] };
+  filtered.forEach(t => { if (byStatus[t.status]) byStatus[t.status].push(t); });
+
+  const pts = (arr) => arr.reduce((sum, t) => sum + (t.storyPoints || 0), 0);
+  const todoPts   = pts(byStatus.todo);
+  const inPts     = pts(byStatus.inprogress);
+  const donePts   = pts(byStatus.done);
+  const totalPts  = todoPts + inPts + donePts;
+  const progress  = totalPts > 0 ? Math.round((donePts / totalPts) * 100) : 0;
+
+  statsBar.innerHTML = `
+    <div class="stat">
+      <span class="stat-num">${totalTickets}</span>
+      <span class="stat-tag">Tickets</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num n-todo">${todoPts}</span>
+      <span class="stat-tag">To Do</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num n-prog">${inPts}</span>
+      <span class="stat-tag">In Progress</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num n-done">${donePts}</span>
+      <span class="stat-tag">Done</span>
+    </div>
+    <div class="stat stat-prog">
+      <div class="pbar-track">
+        <div class="pbar-fill" style="width: ${progress}%"></div>
+      </div>
+      <span class="stat-tag">${progress}% complete</span>
+    </div>`;
+}
+
+// ── Card Building ─────────────────────────────────────────────────────────────
 function buildCard(ticket) {
   const PRIORITY = {
-    blocking: { label: 'Blocking', cls: 'bg-red-100 text-red-700 border border-red-200' },
-    urgent:   { label: 'Urgent',   cls: 'bg-amber-100 text-amber-700 border border-amber-200' },
-    normal:   { label: 'Normal',   cls: 'bg-slate-100 text-slate-500' },
+    blocking: { label: 'Blocking', cls: 'badge-blocking', border: 'border-priority-blocking' },
+    urgent:   { label: 'Urgent',   cls: 'badge-urgent',   border: 'border-priority-urgent'   },
+    normal:   { label: 'Normal',   cls: 'badge-normal',   border: 'border-priority-normal'   },
   };
   const p = PRIORITY[ticket.priority] || PRIORITY.normal;
 
   const card = document.createElement('div');
-  card.className  = 'ticket-card bg-white border border-slate-200 rounded-xl p-3 shadow-sm cursor-grab hover:shadow-md transition-shadow group relative select-none';
+  card.className  = `ticket-card ${p.border}`;
   card.draggable  = true;
   card.dataset.id = ticket.id;
 
+  // ── Drag events ──────────────────────────────────────────
   card.addEventListener('dragstart', e => {
     draggedId = ticket.id;
-    card.classList.add('dragging');
+    requestAnimationFrame(() => card.classList.add('dragging'));
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', ticket.id);
   });
+
   card.addEventListener('dragend', () => {
     card.classList.remove('dragging');
     draggedId = null;
+    document.querySelectorAll('.drop-zone').forEach(z => z.classList.remove('drag-over'));
   });
 
+  // ── Click to preview ──────────────────────────────────────
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('.card-action-btn')) return;
+    openPreview(ticket.id);
+  });
+
+  // ── Build inner HTML
   const descHtml = ticket.description
-    ? `<p class="text-slate-400 text-xs line-clamp-2 mt-0.5 mb-2">${esc(ticket.description)}</p>` : '';
+    ? `<p class="card-desc">${esc(ticket.description)}</p>` : '';
 
   const pointsBadge = ticket.storyPoints
-    ? `<span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">${ticket.storyPoints} pts</span>` : '';
+    ? `<span class="badge-points">${ticket.storyPoints} pt</span>` : '';
 
   const critBadge = ticket.acceptanceCriteria?.length
-    ? `<span class="text-xs text-slate-400">✓ ${ticket.acceptanceCriteria.length} criteria</span>` : '';
+    ? `<span class="badge-criteria">✓ ${ticket.acceptanceCriteria.length}</span>` : '';
+
+  const timeAgo = ticket.updatedAt || ticket.createdAt
+    ? `<span class="card-time">${relativeTime(ticket.updatedAt || ticket.createdAt)}</span>` : '';
 
   card.innerHTML = `
-    <div class="absolute top-2 right-2 hidden group-hover:flex gap-1 z-10">
-      <button onclick="openModal('${ticket.id}')"
-        class="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-md hover:bg-indigo-200 font-medium">Edit</button>
-      <button onclick="handleDelete('${ticket.id}')"
-        class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-md hover:bg-red-200 font-medium">Del</button>
+    <div class="card-header">
+      <p class="card-title">${esc(ticket.title)}</p>
+      <div class="card-actions">
+        <button class="card-action-btn card-action-edit" onclick="openModal('${ticket.id}')" title="Edit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="card-action-btn card-action-del" onclick="handleDelete('${ticket.id}')" title="Delete">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
     </div>
-    <h3 class="font-semibold text-slate-800 text-sm pr-20 leading-snug">${esc(ticket.title)}</h3>
     ${descHtml}
-    <div class="flex items-center gap-2 flex-wrap mt-1">
-      ${pointsBadge}
-      <span class="text-xs px-2 py-0.5 rounded-full font-medium ${p.cls}">${p.label}</span>
-      ${critBadge}
+    <div class="card-footer">
+      <div class="card-meta">
+        ${pointsBadge}
+        <span class="badge-priority ${p.cls}">${p.label}</span>
+        ${critBadge}
+      </div>
+      ${timeAgo}
     </div>`;
+
   return card;
+}
+
+// ── Relative Time ─────────────────────────────────────────────────────────────
+function relativeTime(isoString) {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 30) return `${days}d ago`;
+  return new Date(isoString).toLocaleDateString();
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -99,7 +253,8 @@ function openModal(ticketId = null, defaultStatus = 'todo') {
   if (ticketId) {
     const t = tickets.find(t => t.id === ticketId);
     if (!t) return;
-    document.getElementById('modal-title').textContent       = 'Edit Ticket';
+    closePreview();
+    document.getElementById('modal-title').innerHTML = 'Edit Ticket <span class="m-tag">Edit</span>';
     document.getElementById('ticket-title').value           = t.title;
     document.getElementById('ticket-description').value     = t.description || '';
     document.getElementById('ticket-points').value          = t.storyPoints || '';
@@ -107,7 +262,7 @@ function openModal(ticketId = null, defaultStatus = 'todo') {
     document.getElementById('ticket-status').value          = t.status;
     currentCriteria = [...(t.acceptanceCriteria || [])];
   } else {
-    document.getElementById('modal-title').textContent       = 'New Ticket';
+    document.getElementById('modal-title').innerHTML = 'New Ticket <span class="m-tag">Draft</span>';
     document.getElementById('ticket-title').value           = '';
     document.getElementById('ticket-description').value     = '';
     document.getElementById('ticket-points').value          = '';
@@ -122,7 +277,8 @@ function openModal(ticketId = null, defaultStatus = 'todo') {
 
 function closeModal() {
   document.getElementById('modal').classList.add('hidden');
-  editingId = null; currentCriteria = [];
+  editingId = null;
+  currentCriteria = [];
 }
 
 function handleModalBackdrop(e) {
@@ -132,6 +288,9 @@ function handleModalBackdrop(e) {
 async function saveTicket() {
   const title = document.getElementById('ticket-title').value.trim();
   if (!title) { showToast('Title is required', 'error'); return; }
+
+  const saveBtn = document.querySelector('.btn-save');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
   const payload = {
     title,
@@ -157,6 +316,8 @@ async function saveTicket() {
     renderBoard();
   } catch (err) {
     showToast(err.message || 'Save failed', 'error');
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Ticket'; }
   }
 }
 
@@ -176,11 +337,11 @@ function renderCriteria() {
   container.innerHTML = '';
   currentCriteria.forEach((c, i) => {
     const row = document.createElement('div');
-    row.className = 'flex items-start gap-2 bg-slate-50 rounded-lg px-3 py-2 text-sm';
+    row.className = 'criteria-row';
     row.innerHTML = `
-      <span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span>
-      <span class="flex-1 text-slate-700">${esc(c)}</span>
-      <button onclick="removeCriteria(${i})" class="text-slate-300 hover:text-red-500 text-lg leading-none">&times;</button>`;
+      <span class="criteria-check">✓</span>
+      <span class="criteria-text">${esc(c)}</span>
+      <button class="criteria-remove" onclick="removeCriteria(${i})">&times;</button>`;
     container.appendChild(row);
   });
 }
@@ -209,20 +370,33 @@ function modalCtx() {
   };
 }
 
+function setAiLock(locked) {
+  aiInProgress = locked;
+  document.querySelectorAll('.ai-btn').forEach(btn => {
+    btn.disabled = locked;
+    if (locked) btn.classList.add('ai-btn-disabled');
+    else btn.classList.remove('ai-btn-disabled');
+  });
+}
+
 async function aiGenerateCriteria() {
+  if (aiInProgress) return;
   const ctx = modalCtx();
   if (!ctx.title) { showToast('Enter a title first', 'error'); return; }
+  setAiLock(true);
   showLoading('Generating acceptance criteria…');
   try {
     const res = await apiPost('/ai/generate', { type: 'acceptance_criteria', ...ctx });
     if (res.acceptanceCriteria) { currentCriteria = res.acceptanceCriteria; renderCriteria(); showToast('Criteria generated'); }
   } catch (err) { showToast(err.message, 'error'); }
-  finally { hideLoading(); }
+  finally { hideLoading(); setAiLock(false); }
 }
 
 async function aiEstimatePoints() {
+  if (aiInProgress) return;
   const ctx = modalCtx();
   if (!ctx.title) { showToast('Enter a title first', 'error'); return; }
+  setAiLock(true);
   showLoading('Estimating story points…');
   try {
     const res = await apiPost('/ai/generate', { type: 'story_points', ...ctx });
@@ -232,12 +406,14 @@ async function aiEstimatePoints() {
       showToast(`Estimated: ${res.storyPoints} pts`);
     }
   } catch (err) { showToast(err.message, 'error'); }
-  finally { hideLoading(); }
+  finally { hideLoading(); setAiLock(false); }
 }
 
 async function aiAnalyzePriority() {
+  if (aiInProgress) return;
   const ctx = modalCtx();
   if (!ctx.title) { showToast('Enter a title first', 'error'); return; }
+  setAiLock(true);
   showLoading('Analyzing priority…');
   try {
     const res = await apiPost('/ai/generate', { type: 'priority', ...ctx });
@@ -247,12 +423,14 @@ async function aiAnalyzePriority() {
       showToast(`Priority: ${res.priority}`);
     }
   } catch (err) { showToast(err.message, 'error'); }
-  finally { hideLoading(); }
+  finally { hideLoading(); setAiLock(false); }
 }
 
 async function aiAutoFillAll() {
+  if (aiInProgress) return;
   const ctx = modalCtx();
   if (!ctx.title) { showToast('Enter a title first', 'error'); document.getElementById('ticket-title').focus(); return; }
+  setAiLock(true);
   showLoading('AI Agile Coach is analysing your story…');
   try {
     const res = await apiPost('/ai/generate', { type: 'all', ...ctx });
@@ -263,24 +441,45 @@ async function aiAutoFillAll() {
     if (res.priorityReasoning)    showReasoning('priority-reasoning', res.priorityReasoning);
     showToast('AI auto-fill complete!');
   } catch (err) { showToast(err.message, 'error'); }
-  finally { hideLoading(); }
+  finally { hideLoading(); setAiLock(false); }
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────────────────────
-function onDragOver(e)  { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
-function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over');
+}
+
+function onDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.classList.remove('drag-over');
+  }
+}
 
 async function onDrop(e, targetStatus) {
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
-  if (!draggedId) return;
-  const ticket = tickets.find(t => t.id === draggedId);
+
+  const id = draggedId || e.dataTransfer.getData('text/plain');
+  if (!id) return;
+
+  const ticket = tickets.find(t => t.id === id);
   if (!ticket || ticket.status === targetStatus) return;
+
+  // Optimistic update
+  tickets = tickets.map(t => t.id === id ? { ...t, status: targetStatus } : t);
+  renderBoard();
+
   try {
-    const updated = await apiPut(`/tickets/${draggedId}`, { ...ticket, status: targetStatus });
-    tickets = tickets.map(t => t.id === draggedId ? updated : t);
+    const updated = await apiPut(`/tickets/${id}`, { ...ticket, status: targetStatus });
+    tickets = tickets.map(t => t.id === id ? updated : t);
     renderBoard();
-  } catch { showToast('Move failed', 'error'); }
+  } catch {
+    tickets = tickets.map(t => t.id === id ? ticket : t);
+    renderBoard();
+    showToast('Move failed', 'error');
+  }
 }
 
 // ── HTTP Helpers ──────────────────────────────────────────────────────────────
@@ -303,25 +502,90 @@ function hideLoading() { document.getElementById('loading').classList.add('hidde
 let toastTimer;
 function showToast(msg, type = 'success') {
   const inner = document.getElementById('toast-inner');
-  inner.className   = `px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white ${type === 'error' ? 'bg-red-600' : 'bg-slate-800'}`;
+  inner.className   = `toast-inner ${type === 'error' ? 'toast-error' : 'toast-success'}`;
   inner.textContent = msg;
-  document.getElementById('toast').classList.remove('hidden');
+  const toast = document.getElementById('toast');
+  toast.classList.remove('hidden');
+  toast.classList.add('toast-enter');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => document.getElementById('toast').classList.add('hidden'), 3500);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('toast-enter');
+    toast.classList.add('hidden');
+  }, 3500);
 }
 
 function showReasoning(id, text) {
   const el = document.getElementById(id);
-  el.textContent = `💡 ${text}`;
+  el.textContent = `↳ ${text}`;
   el.classList.remove('hidden');
 }
 
-function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
 
 function esc(str) {
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+// ── Floating Preview ──────────────────────────────────────────────────────────
+function openPreview(id) {
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  previewId = id;
+
+  const panel = document.getElementById('float-preview');
+  panel.dataset.tid = id;
+
+  // Status
+  const sMap = { todo: ['ci-todo','To Do'], inprogress: ['ci-prog','In Progress'], done: ['ci-done','Done'] };
+  const [ciCls, sLabel] = sMap[t.status] || sMap.todo;
+  document.getElementById('fp-indicator').className = 'fp-indicator ' + ciCls;
+  document.getElementById('fp-status').textContent = sLabel;
+
+  // Content
+  document.getElementById('fp-title').textContent = t.title;
+  const descEl = document.getElementById('fp-desc');
+  descEl.textContent = t.description || '';
+  descEl.style.display = t.description ? '' : 'none';
+
+  // Meta
+  const PRI = { blocking: ['Blocking','badge-blocking'], urgent: ['Urgent','badge-urgent'], normal: ['Normal','badge-normal'] };
+  const [pL, pC] = PRI[t.priority] || PRI.normal;
+  let m = `<span class="badge-priority ${pC}">${pL}</span>`;
+  if (t.storyPoints) m += `<span class="badge-points">${t.storyPoints} pt</span>`;
+  if (t.acceptanceCriteria?.length) m += `<span class="badge-criteria">✓ ${t.acceptanceCriteria.length}</span>`;
+  document.getElementById('fp-meta').innerHTML = m;
+
+  // Criteria
+  const cs = document.getElementById('fp-criteria-section');
+  const cl = document.getElementById('fp-criteria');
+  if (t.acceptanceCriteria?.length) {
+    cs.style.display = '';
+    cl.innerHTML = t.acceptanceCriteria.map(c =>
+      `<div class="fp-criteria-item"><span class="fp-check">✓</span><span>${esc(c)}</span></div>`
+    ).join('');
+  } else { cs.style.display = 'none'; }
+
+  // Time
+  const ts = t.updatedAt || t.createdAt;
+  document.getElementById('fp-time').textContent = ts ? `${t.updatedAt ? 'Updated' : 'Created'} ${relativeTime(ts)}` : '';
+
+  // Open
+  panel.classList.add('open');
+  document.querySelector('.board')?.classList.add('board-shifted');
+
+  // Highlight
+  document.querySelectorAll('.ticket-card').forEach(c => c.classList.remove('active-card'));
+  const ac = document.querySelector(`.ticket-card[data-id="${id}"]`);
+  if (ac) ac.classList.add('active-card');
+}
+
+function closePreview() {
+  previewId = null;
+  document.getElementById('float-preview')?.classList.remove('open');
+  document.querySelector('.board')?.classList.remove('board-shifted');
+  document.querySelectorAll('.ticket-card').forEach(c => c.classList.remove('active-card'));
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────
